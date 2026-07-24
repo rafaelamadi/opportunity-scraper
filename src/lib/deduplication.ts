@@ -120,7 +120,7 @@ export async function deduplicateTenders(): Promise<{
             duplicate_group_id: hash,
             canonical_id: canonical.id,
             is_duplicate: !isCanonical,
-            duplicate_sources: isCanonical ? otherSources : null,
+            duplicate_sources: isCanonical ? otherSources : undefined,
           },
         });
       }

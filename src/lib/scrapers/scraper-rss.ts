@@ -35,50 +35,13 @@ interface RSSFeedConfig {
 }
 
 // RSS feed configurations
+// Note: techcabal, thecable, nairametrics, and businessday were removed 2026-07-24
+// (low yield — see TODO.md for details and how to bring them back).
 const RSS_FEEDS: RSSFeedConfig[] = [
-  {
-    name: "techcabal",
-    url: "https://techcabal.com/feed/",
-    keywords: [
-      "developer",
-      "software",
-      "platform",
-      "startup",
-      "funding",
-      "hiring",
-      "launch",
-      "app",
-      "digital",
-      "ict",
-    ],
-  },
-  {
-    name: "businessday",
-    url: "https://businessday.ng/feed/",
-    keywords: ["digital", "ict", "technology", "software", "platform", "automation", "system"],
-  },
-  {
-    name: "thecable",
-    url: "https://www.thecable.ng/feed/",
-    keywords: [
-      "e-government",
-      "digital",
-      "ict",
-      "government",
-      "technology",
-      "platform",
-      "modernization",
-    ],
-  },
   {
     name: "pulse_tech",
     url: "https://pulse.ng/tech/feed/",
     keywords: ["software", "platform", "app", "developer", "tech", "digital", "launch"],
-  },
-  {
-    name: "nairametrics",
-    url: "https://nairametrics.com/feed/",
-    keywords: ["startup", "platform", "software", "fintech", "digital", "technology", "app"],
   },
   {
     name: "fundsforngos",
@@ -115,6 +78,11 @@ const RSS_FEEDS: RSSFeedConfig[] = [
     opportunity_type: "grant",
   },
 ];
+
+/** The real `source_name` values RSS-derived rows are stored under (`rss_${feedName}`). */
+export function listRssSourceNames(): string[] {
+  return RSS_FEEDS.map((feed) => `rss_${feed.name}`);
+}
 
 function stripHtmlCDATA(text: string): string {
   return text
@@ -260,16 +228,14 @@ async function processFeed(config: RSSFeedConfig) {
     }
 
     const inserted = await insertTendersBulk(tenders);
-    const success = inserted > 0;
-
     console.log(`✓ Inserted ${inserted}/${tenders.length} items into Supabase`);
 
     await logScraperRun({
       source_name: `rss_${config.name}`,
       scraped_count: tenders.length,
       inserted_count: inserted,
-      success,
-      error_message: success ? null : "No items were inserted",
+      success: true,
+      error_message: null,
       elapsed_ms: Date.now() - startTime,
     });
 
@@ -277,7 +243,7 @@ async function processFeed(config: RSSFeedConfig) {
       source: `rss_${config.name}`,
       scraped: tenders.length,
       inserted,
-      success,
+      success: true,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

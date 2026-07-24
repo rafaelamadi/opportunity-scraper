@@ -12,6 +12,12 @@ import { type NextRequest, NextResponse } from "next/server";
 import { deduplicateTenders } from "@/lib/deduplication";
 import { listScrapers, runAllScrapers } from "@/lib/scrapers/registry";
 
+// Safety margin as more sources get added — a real run currently takes ~37s across
+// 14 active sources (measured 2026-07-24). Vercel Hobby caps at 60s regardless of
+// this value, so this just makes the ceiling explicit rather than relying on the
+// (lower) framework default.
+export const maxDuration = 60;
+
 // Verify the cron secret to prevent unauthorized calls
 function verifyCronSecret(request: NextRequest): boolean {
   const secret = request.headers.get("authorization")?.replace("Bearer ", "");

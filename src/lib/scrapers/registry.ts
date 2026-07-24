@@ -12,12 +12,17 @@ import { runFRSFNRSScraper } from "./scraper-frsfnrs";
 import { runGIZScraper } from "./scraper-giz";
 import { runInnoLightScraper } from "./scraper-innolight";
 import { runLondonCFScraper } from "./scraper-londoncf";
-import { runNigeriaTendersScraper } from "./scraper-nigeriatenders";
+// nigeriatenders.com disabled 2026-07-24: site now loads tender listings via
+// client-side JS, so fetch() only ever sees an empty shell. See TODO.md for details.
+// import { runNigeriaTendersScraper } from "./scraper-nigeriatenders";
 import { runNovoNordiskScraper } from "./scraper-novo-nordisk";
-import { runRssScraper } from "./scraper-rss";
+import { listRssSourceNames, runRssScraper } from "./scraper-rss";
 import { runTenderNgScraper } from "./scraper-tender-ng";
-import { runThisDayScraper } from "./scraper-thisday";
-import { runVanguardScraper } from "./scraper-vanguard";
+// thisdaylive.com and vanguardngr.com disabled 2026-07-24: low yield relative to
+// cron runtime cost. See TODO.md for the Cloudflare/keyword-filtering research
+// behind these two and how to bring them back.
+// import { runThisDayScraper } from "./scraper-thisday";
+// import { runVanguardScraper } from "./scraper-vanguard";
 import { sleep } from "./utils";
 
 export type ScraperResult = {
@@ -40,9 +45,9 @@ type ScraperFunction = () => Promise<ScraperResult | ScraperResult[]>;
 const SCRAPERS: { name: string; fn: ScraperFunction }[] = [
   { name: "etenders.com.ng", fn: runEtendersScraper },
   { name: "tender.ng", fn: runTenderNgScraper },
-  { name: "nigeriatenders.com", fn: runNigeriaTendersScraper },
-  { name: "thisdaylive.com", fn: runThisDayScraper },
-  { name: "vanguardngr.com", fn: runVanguardScraper },
+  // { name: "nigeriatenders.com", fn: runNigeriaTendersScraper }, // disabled, see TODO.md
+  // { name: "thisdaylive.com", fn: runThisDayScraper }, // disabled, see TODO.md
+  // { name: "vanguardngr.com", fn: runVanguardScraper }, // disabled, see TODO.md
   { name: "rss_feeds", fn: runRssScraper },
   { name: "innolight_qatar", fn: runInnoLightScraper },
   { name: "giz_tenders", fn: runGIZScraper },
@@ -126,4 +131,17 @@ export async function runScraperByName(name: string): Promise<ScraperResult | Sc
  */
 export function listScrapers(): string[] {
   return SCRAPERS.map((s) => s.name);
+}
+
+/**
+ * Real `source_name` values currently-active scrapers can write to the database.
+ * Expands the single "rss_feeds" registry entry into its actual per-feed names
+ * (e.g. "rss_ukri", "rss_businessday") since that's what's actually stored on each
+ * opportunity row, not the registry entry name itself.
+ *
+ * Used to filter the dashboard's source list down to sources that still run today,
+ * without deleting historical data from disabled sources (see TODO.md).
+ */
+export function listActiveSourceNames(): string[] {
+  return SCRAPERS.flatMap((s) => (s.name === "rss_feeds" ? listRssSourceNames() : s.name));
 }

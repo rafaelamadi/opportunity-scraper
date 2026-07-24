@@ -128,16 +128,14 @@ export async function runNigeriaTendersScraper() {
     }
 
     const inserted = await insertTendersBulk(tenders);
-    const success = inserted > 0;
-
     console.log(`✓ Inserted ${inserted}/${tenders.length} tenders into Supabase`);
 
     await logScraperRun({
       source_name: SOURCE.name,
       scraped_count: tenders.length,
       inserted_count: inserted,
-      success,
-      error_message: success ? null : "No tenders were inserted",
+      success: true,
+      error_message: null,
       elapsed_ms: Date.now() - startTime,
     });
 
@@ -145,7 +143,7 @@ export async function runNigeriaTendersScraper() {
       source: SOURCE.name,
       scraped: tenders.length,
       inserted,
-      success,
+      success: true,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

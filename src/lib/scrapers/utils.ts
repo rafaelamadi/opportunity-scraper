@@ -134,21 +134,84 @@ export async function insertOpportunityToSupabase(opportunity: ReturnType<typeof
   }
 }
 
+// PostgREST builds `.in()` filters into the request URL, which breaks (a network-level
+// "fetch failed", not even a clean HTTP error) once the URL gets long enough. Measured
+// directly: 90 real etenders URLs (13.8k chars) succeeded, 95 (14.6k chars) failed. Chunking
+// by a fixed *row count* isn't safe on its own — a source with much longer URLs than
+// etenders' ~162-char average (frs_fnrs runs up to 429 chars) could still blow the same
+// limit well under 40 rows. Chunk by cumulative character length instead, with real margin
+// below the ~14k boundary.
+const DUPLICATE_LOOKUP_MAX_CHARS = 8000;
+
+/** Split `urls` into chunks that each stay under DUPLICATE_LOOKUP_MAX_CHARS total length. */
+function chunkUrlsByLength(urls: string[], maxChars: number): string[][] {
+  const chunks: string[][] = [];
+  let current: string[] = [];
+  let currentLength = 0;
+
+  for (const url of urls) {
+    // +1 accounts for the comma PostgREST joins values with.
+    const addedLength = url.length + 1;
+    if (current.length > 0 && currentLength + addedLength > maxChars) {
+      chunks.push(current);
+      current = [];
+      currentLength = 0;
+    }
+    current.push(url);
+    currentLength += addedLength;
+  }
+  if (current.length > 0) chunks.push(current);
+
+  return chunks;
+}
+
 /**
- * Insert multiple opportunities with delay between each insert
+ * Insert multiple opportunities, skipping ones whose source_url already exists.
+ *
+ * Checks all URLs in chunked batched queries instead of one round-trip per row
+ * (previously: N sequential SELECTs + a 500ms sleep after each, ~109s of pure
+ * delay alone for a 218-row run). New rows are still inserted one at a time with
+ * a small delay to stay well under Supabase's rate limits, but that delay now
+ * only applies to genuinely new rows, not every row scraped.
+ *
+ * A failed lookup throws rather than falling through to "nothing exists yet" —
+ * that fallback previously caused every row to be inserted as a duplicate
+ * whenever a chunk's query failed.
  */
 export async function insertOpportunitiesBulk(
   opportunities: ReturnType<typeof buildOpportunityDict>[],
   delayMs: number = INSERT_DELAY,
 ): Promise<number> {
-  let inserted = 0;
+  if (opportunities.length === 0) return 0;
 
-  for (const opportunity of opportunities) {
-    const success = await insertOpportunityToSupabase(opportunity);
-    if (success) {
-      inserted++;
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const urls = opportunities.map((o) => o.source_url);
+  const existingUrls = new Set<string>();
+
+  for (const chunk of chunkUrlsByLength(urls, DUPLICATE_LOOKUP_MAX_CHARS)) {
+    const { data, error } = await supabase.from("opportunities").select("source_url").in("source_url", chunk);
+
+    if (error) {
+      throw new Error(`Duplicate lookup failed: ${error.message}`);
     }
-    // Add delay between inserts to avoid rate limiting
+
+    for (const row of data || []) {
+      existingUrls.add(row.source_url);
+    }
+  }
+
+  const newOpportunities = opportunities.filter((o) => !existingUrls.has(o.source_url));
+
+  let inserted = 0;
+  for (const opportunity of newOpportunities) {
+    const { error } = await supabase.from("opportunities").insert([opportunity]);
+    if (error) {
+      console.error(`Error inserting opportunity "${opportunity.title}":`, error.message);
+      continue;
+    }
+    inserted++;
+    // Small delay between writes (not reads) to stay under Supabase's rate limits.
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 

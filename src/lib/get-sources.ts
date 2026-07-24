@@ -1,5 +1,12 @@
+import { listActiveSourceNames } from "./scrapers/registry";
 import { supabase } from "./supabase";
 
+/**
+ * Distinct source_names in the opportunities table, filtered to only sources
+ * that are still actively scraped. Disabled sources (see TODO.md) keep their
+ * historical rows in the database — this just keeps them out of the sidebar
+ * and source filters, rather than deleting the data.
+ */
 export async function getSourcesFromDB(): Promise<string[]> {
   try {
     const { data, error } = await supabase.from("opportunities").select("source_name");
@@ -9,8 +16,10 @@ export async function getSourcesFromDB(): Promise<string[]> {
       return [];
     }
 
-    // Get unique source names
-    const uniqueSources = Array.from(new Set(data?.map((row) => row.source_name) || [])).sort();
+    const activeSourceNames = new Set(listActiveSourceNames());
+    const uniqueSources = Array.from(new Set(data?.map((row) => row.source_name) || []))
+      .filter((source) => activeSourceNames.has(source))
+      .sort();
 
     return uniqueSources as string[];
   } catch (err) {

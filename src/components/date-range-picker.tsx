@@ -12,17 +12,31 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 interface DateRangePickerProps {
   value?: DateRange;
   onChange?: (value: DateRange | undefined) => void;
+  /**
+   * When true, this is a controlled component with no uncontrolled fallback —
+   * an undefined `value` means "no range selected" (shows placeholder text),
+   * not "default to the last 29 days". Existing uncontrolled usages are
+   * unaffected since they never pass `value={undefined}` in the first place.
+   */
+  controlled?: boolean;
+  placeholder?: string;
 }
 
-export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
+export function DateRangePicker({
+  value,
+  onChange,
+  controlled = false,
+  placeholder = "Select date",
+}: DateRangePickerProps) {
   const [open, setOpen] = React.useState(false);
   const [internalDateRange, setInternalDateRange] = React.useState<DateRange | undefined>(() => {
+    if (controlled) return undefined;
     const to = new Date();
     const from = subDays(to, 29);
     return { from, to };
   });
-  const dateRange = value ?? internalDateRange;
-  let dateRangeLabel = "Select date";
+  const dateRange = controlled ? value : (value ?? internalDateRange);
+  let dateRangeLabel = placeholder;
 
   if (dateRange?.from) {
     dateRangeLabel = format(dateRange.from, "d MMM yyyy");
@@ -33,7 +47,7 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
   }
 
   const handleDateChange = (nextValue: DateRange | undefined) => {
-    if (!value) {
+    if (!controlled && !value) {
       setInternalDateRange(nextValue);
     }
     onChange?.(nextValue);

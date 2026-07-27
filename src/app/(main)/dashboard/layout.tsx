@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { users } from "@/data/users";
+import { getLastScrapeStatus } from "@/lib/get-scrape-status";
 import { getSourcesFromDB } from "@/lib/get-sources";
 import { cn } from "@/lib/utils";
 import { getPreference } from "@/server/server-actions";
@@ -23,10 +24,11 @@ import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
-  const [variant, collapsible, sources] = await Promise.all([
+  const [variant, collapsible, sources, scrapeStatus] = await Promise.all([
     getPreference("sidebar_variant"),
     getPreference("sidebar_collapsible"),
     getSourcesFromDB(),
+    getLastScrapeStatus(),
   ]);
 
   return (
@@ -38,7 +40,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
         } as React.CSSProperties
       }
     >
-      <AppSidebar variant={variant} collapsible={collapsible} sources={sources} />
+      <AppSidebar variant={variant} collapsible={collapsible} sources={sources} scrapeStatus={scrapeStatus} />
       <SidebarInset
         className={cn(
           "[html[data-content-layout=centered]_&>*]:mx-auto",

@@ -69,7 +69,7 @@ export default function TendersPage() {
         setLoading(true);
         setError(null);
 
-        let query = supabase.from("opportunities").select("*").order("date_published", { ascending: false });
+        let query = supabase.from("opportunities").select("*");
 
         if (source && source !== "all") {
           query = query.eq("source_name", source);
@@ -81,9 +81,25 @@ export default function TendersPage() {
           throw new Error(fetchError.message);
         }
 
-        // Client-side deduplication: keep first occurrence of each unique title
+        // Sort newest-first by date_published, falling back to created_at for
+        // sources that don't reliably have a published date (several sources
+        // have 0% date_published fill — sorting by a mostly-null column gives
+        // an effectively arbitrary order, scrambling today's inserts in with
+        // much older rows instead of showing them at the top). This must run
+        // BEFORE dedup below, so dedup keeps each title's newest row rather
+        // than whichever occurrence happened to come first in an unordered
+        // fetch (that previously made "old"/"new" status look almost random
+        // for sources that re-scrape the same title day after day).
+        const sorted = [...(data || [])].sort((a, b) => {
+          const aDate = a.date_published ? new Date(a.date_published) : new Date(a.created_at);
+          const bDate = b.date_published ? new Date(b.date_published) : new Date(b.created_at);
+          return bDate.getTime() - aDate.getTime();
+        });
+
+        // Client-side deduplication: keep first (= newest, after the sort above)
+        // occurrence of each unique title.
         const seen = new Set<string>();
-        const uniqueTenders = (data || []).filter((tender) => {
+        const uniqueTenders = sorted.filter((tender) => {
           const titleLower = tender.title
             .toLowerCase()
             .replace(/[^\w\s]/g, "")

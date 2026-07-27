@@ -18,9 +18,11 @@ import {
 } from "@/components/ui/sidebar";
 import { APP_CONFIG } from "@/config/app-config";
 import { rootUser } from "@/data/users";
+import type { ScrapeStatus } from "@/lib/get-scrape-status";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
 import { NavUser } from "./nav-user";
+import { ScrapeStatusCard } from "./scrape-status-card";
 import { SidebarSupportCard } from "./sidebar-support-card";
 import { TenderNav } from "./tender-nav";
 
@@ -63,9 +65,10 @@ const _data = {
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   sources?: string[];
+  scrapeStatus?: ScrapeStatus;
 }
 
-export function AppSidebar({ sources = [], ...props }: AppSidebarProps) {
+export function AppSidebar({ sources = [], scrapeStatus = null, ...props }: AppSidebarProps) {
   const pathname = usePathname();
   const { sidebarVariant, sidebarCollapsible, isSynced } = usePreferencesStore(
     useShallow((s) => ({
@@ -108,6 +111,7 @@ export function AppSidebar({ sources = [], ...props }: AppSidebarProps) {
         <TenderNav sources={sources} />
       </SidebarContent>
       <SidebarFooter>
+        <ScrapeStatusCard status={scrapeStatus} />
         <SidebarSupportCard />
         <NavUser user={rootUser} />
       </SidebarFooter>

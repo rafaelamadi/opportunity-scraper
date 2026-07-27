@@ -10,7 +10,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { type Opportunity, supabase } from "@/lib/supabase";
 
 import { ALL_CATEGORIES, TendersFilters } from "./_components/tenders-filters";
+import { TendersPagination } from "./_components/tenders-pagination";
 import { TendersTable } from "./_components/tenders-table";
+
+const DEFAULT_PAGE_SIZE = 25;
 
 export default function TendersPage() {
   const searchParams = useSearchParams();
@@ -22,6 +25,8 @@ export default function TendersPage() {
   const [error, setError] = useState<string | null>(null);
   const [category, setCategory] = useState<string>(ALL_CATEGORIES);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   useEffect(() => {
     const fetchBookmarks = async () => {
@@ -122,9 +127,11 @@ export default function TendersPage() {
 
     fetchTenders();
     // Reset filters when switching sources — a category picked on one source
-    // may not exist on another.
+    // may not exist on another. Also reset to page 1, since the previous
+    // page may not exist in the new source's result set.
     setCategory(ALL_CATEGORIES);
     setDateRange(undefined);
+    setPage(1);
   }, [source]);
 
   const categories = useMemo(() => {
@@ -155,6 +162,24 @@ export default function TendersPage() {
       return true;
     });
   }, [tenders, category, dateRange]);
+
+  // Narrowing the filters can leave the current page out of range (e.g. page 4
+  // of an unfiltered list may not exist once a category filter is applied) —
+  // reset to page 1 whenever category or the date range change. (The linter's
+  // exhaustive-deps check flags category/dateRange as "unnecessary" since the
+  // effect body doesn't read them directly — but reacting to the change is
+  // the entire point here, so they're intentionally kept.)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: category/dateRange are intentionally watched, not read
+  useEffect(() => {
+    setPage(1);
+  }, [category, dateRange]);
+
+  const pageCount = Math.max(Math.ceil(filteredTenders.length / pageSize), 1);
+  const currentPage = Math.min(page, pageCount);
+  const paginatedTenders = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredTenders.slice(start, start + pageSize);
+  }, [filteredTenders, currentPage, pageSize]);
 
   if (loading) {
     return (
@@ -211,7 +236,23 @@ export default function TendersPage() {
       )}
 
       {filteredTenders.length > 0 && (
-        <TendersTable tenders={filteredTenders} bookmarkedIds={bookmarkedIds} onToggleBookmark={handleToggleBookmark} />
+        <>
+          <TendersTable
+            tenders={paginatedTenders}
+            bookmarkedIds={bookmarkedIds}
+            onToggleBookmark={handleToggleBookmark}
+          />
+          <TendersPagination
+            currentPage={currentPage}
+            pageSize={pageSize}
+            totalItems={filteredTenders.length}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
+          />
+        </>
       )}
     </div>
   );
